@@ -1,6 +1,9 @@
 # PongC
 Classic game of Pong in the terminal made in C.
 
+![](screenshots/screenshot_1.jpg)
+![](screenshots/screenshot_2.jpg)
+
 # How-to-run
 On UNIX-like operating systems use;
 ```shell
