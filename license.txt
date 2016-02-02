@@ -1,14 +1,3 @@
-# PongC
-Classic game of Pong in the terminal made in C.
-
-# How-to-run
-On UNIX-like operating systems use;
-```shell
-./a.out
-```
-Have not tried this on Windows, yet.
-
-# Lisence
 The MIT License (MIT)
 Copyright (c) 2015 Alexander Lingtorp
 
