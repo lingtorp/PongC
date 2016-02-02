@@ -4,11 +4,20 @@ Classic game of Pong in the terminal made in C.
 ![](screenshots/screenshot_1.jpg)
 ![](screenshots/screenshot_2.jpg)
 
-# How-to-run
+# How to build
+Simply run:
+```shell
+make
+```
+
+# How to run
 On UNIX-like operating systems use;
 ```shell
-./a.out
+./pong
 ```
+
+It can also be placed within your `$PATH` and run with simply `pong` from any folder.
+
 Have not tried this on Windows, yet.
 
 # Lisence
