@@ -1,8 +1,7 @@
 # PongC
 Classic game of Pong in the terminal made in C.
 
-![](screenshots/screenshot_1.jpg)
-![](screenshots/screenshot_2.jpg)
+![](screenshots/gameplay.gif)
 
 # How to build
 Simply run:
