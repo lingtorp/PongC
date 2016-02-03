@@ -11,7 +11,7 @@ On UNIX-like operating systems use;
 ```
 Have not tried this on Windows, yet.
 
-# Lisence
+# License
 The MIT License (MIT)
 Copyright (c) 2015 Alexander Lingtorp
 
