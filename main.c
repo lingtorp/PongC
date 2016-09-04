@@ -1,5 +1,6 @@
 #include <ncurses.h>
 #include <sys/time.h>
+#include <stdlib.h>
 
 // The number of milliseconds between ticks to the ball and opponent.
 #define TICK_DELAY 50
@@ -15,6 +16,9 @@ typedef struct {
   pong_win win;
   int dyx;
   int dyy;
+  int start_dyx;
+  int start_dyy;
+  bool collided;
 } pong_ball;
 
 // Gameplay handling
@@ -27,6 +31,7 @@ WINDOW *create_newwin(int height, int width, int starty, int startx);
 void destroy_win(WINDOW *local_win);
 
 int main() {
+  srand(time(NULL));
   WINDOW *root = initscr(); /* initialize the curses library */
 
   cbreak();             /* Line buffering disabled pass on everything to me*/
@@ -66,6 +71,9 @@ int main() {
   pong_ball ball;
   ball.dyx = 1; // TODO: Random sign please
   ball.dyy = 1; // TODO: Random sign please
+  ball.start_dyx = 1;
+  ball.start_dyy = 1;
+  ball.collided = false;
   pong_win ball_win;
   ball_win.height = 2;
   ball_win.width = 3;
@@ -156,6 +164,7 @@ void tick_ball(pong_ball *ball, pong_win *opp, pong_win *player) {
       ball->win.posY <= player->posY + player->height &&
       ball->win.posX <= player->posX + player->width) {
     ball->dyx = ball->dyx * -1; // Flip the sign (bounce back)
+    ball->collided = true;
   }
 
   // Check collision with Opponent (aka opp)
@@ -163,6 +172,14 @@ void tick_ball(pong_ball *ball, pong_win *opp, pong_win *player) {
       ball->win.posY <= opp->posY + opp->height &&
       ball->win.posX >= opp->posX - opp->width) {
     ball->dyx = ball->dyx * -1; // Flip the sign (bounce back)
+    ball->collided = true;
+  }
+
+  // Add random velocity when collided with something
+  if (ball->collided) {
+    ball->dyx += rand() % 10;
+    ball->dyy += rand() % 10;
+    ball->collided = false;
   }
 
   // Update ball position by destroying and recreating the window
@@ -185,6 +202,8 @@ void tick_opponent(pong_win *opponent, pong_ball *ball) {
 void reset_ball(pong_ball *ball) {
   ball->win.posX = COLS / 2 - 1;
   ball->win.posY = LINES / 2;
+  ball->dyx = ball->start_dyx;
+  ball->dyy = ball->start_dyy;
 }
 
 // Allocs a new window and sets a box around it plus displays it
