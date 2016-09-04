@@ -129,7 +129,8 @@ int main() {
     mvvline(0, COLS / 2, '|', LINES);
 
     // Redraw instructions
-    mvprintw(0, 0, "EXIT: CTRL + C \nRESET: r");
+    mvprintw(0, 0,
+             "EXIT: CTRL + C \nRESET: r \n MOVEMENT: LEFT/RIGHT ARROW KEYS");
 
     // Redraw scores
     attron(A_BOLD); // The terminals best highlightning mode
