@@ -1,6 +1,8 @@
 #include <ncurses.h>
-#include <sys/time.h>
+#include <stdint.h>
 #include <stdlib.h>
+#include <sys/time.h>
+#include <time.h>
 
 // The number of milliseconds between ticks to the ball and opponent.
 #define TICK_DELAY 50
@@ -23,12 +25,15 @@ typedef struct {
 
 // Gameplay handling
 void tick_ball(pong_ball *ball, pong_win *opp, pong_win *player);
-void tick_opponent(pong_win *opponent, pong_ball *ball);
+void tick_opponent(pong_win *opponent, const pong_ball *ball);
 void reset_ball(pong_ball *ball);
 
 // Window handling
 WINDOW *create_newwin(int height, int width, int starty, int startx);
 void destroy_win(WINDOW *local_win);
+
+int rand_sign();
+int sign(const int x);
 
 int main() {
   srand(time(NULL));
@@ -69,10 +74,8 @@ int main() {
 
   // Init the ball
   pong_ball ball;
-  ball.dyx = 1; // TODO: Random sign please
-  ball.dyy = 1; // TODO: Random sign please
-  ball.start_dyx = 1;
-  ball.start_dyy = 1;
+  ball.dyx = rand_sign();
+  ball.dyy = rand_sign();
   ball.collided = false;
   pong_win ball_win;
   ball_win.height = 2;
@@ -90,7 +93,8 @@ int main() {
   /* Main loop */
   unsigned int diff;
   int ch;
-  while (1) {
+  bool done = false;
+  while (!done) {
     // Check time
     gettimeofday(&now, NULL); // Deprecated in POSIX (?)
     diff = ((now.tv_sec * 1000) + (now.tv_usec / 1000)) -
@@ -104,12 +108,12 @@ int main() {
     // Process player input
     ch = getch();
     switch (ch) {
-    case KEY_RIGHT:
+    case 'k':
       destroy_win(player.win);
       player.posY--;
       player.win = create_newwin(height, width, player.posY, player.posX);
       break;
-    case KEY_LEFT:
+    case 'j':
       destroy_win(player.win);
       player.posY++;
       player.win = create_newwin(height, width, player.posY, player.posX);
@@ -123,19 +127,21 @@ int main() {
       opponent.score = 0;
       reset_ball(&ball);
       break;
+    case 'q':
+      done = true;
     }
 
-    // Redraw the tennis line
-    mvvline(0, COLS / 2, '|', LINES);
-
     // Redraw instructions
-    mvprintw(0, 0,
-             "EXIT: CTRL + C \nRESET: r \n MOVEMENT: LEFT/RIGHT ARROW KEYS");
+    mvprintw(0, 0, "EXIT: q \nRESET: r\nMOVEMENT: UP: k, DOWN: j");
 
     // Redraw scores
     attron(A_BOLD); // The terminals best highlightning mode
     mvprintw(5, COLS / 3, "%i \n", player.score); // 1/3 of the width
     mvprintw(5, COLS - COLS / 3, "%i", opponent.score);
+
+    // Redraw the tennis line
+    mvvline(0, COLS / 2, '|', LINES);
+
     standend(); // Reset all attributes
   }
 
@@ -176,10 +182,10 @@ void tick_ball(pong_ball *ball, pong_win *opp, pong_win *player) {
     ball->collided = true;
   }
 
-  // Add random velocity when collided with something
+  // Add random velocity when collided with players
   if (ball->collided) {
-    ball->dyx += rand() % 10;
-    ball->dyy += rand() % 10;
+    ball->dyx += sign(ball->dyx) * rand() % 2;
+    ball->dyy += sign(ball->dyy) * rand() % 2;
     ball->collided = false;
   }
 
@@ -192,7 +198,7 @@ void tick_ball(pong_ball *ball, pong_win *opp, pong_win *player) {
 }
 
 // Makes the opponent follow the Y-coord of the ball, with a delay
-void tick_opponent(pong_win *opponent, pong_ball *ball) {
+void tick_opponent(pong_win *opponent, const pong_ball *ball) {
   destroy_win(opponent->win);
   opponent->posY += (ball->win.posY - opponent->posY) / 10;
   opponent->win = create_newwin(opponent->height, opponent->width,
@@ -203,12 +209,12 @@ void tick_opponent(pong_win *opponent, pong_ball *ball) {
 void reset_ball(pong_ball *ball) {
   ball->win.posX = COLS / 2 - 1;
   ball->win.posY = LINES / 2;
-  ball->dyx = ball->start_dyx;
-  ball->dyy = ball->start_dyy;
+  ball->dyx = rand_sign();
+  ball->dyy = rand_sign();
 }
 
 // Allocs a new window and sets a box around it plus displays it
-WINDOW *create_newwin(int height, int width, int starty, int startx) {
+WINDOW *create_newwin(const int height, const int width, const int starty, const int startx) {
   WINDOW *local_win;
 
   local_win = newwin(height, width, starty, startx);
@@ -229,4 +235,15 @@ void destroy_win(WINDOW *local_win) {
   wborder(local_win, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ');
   wrefresh(local_win);
   delwin(local_win);
+}
+
+// Return -1/1 with a roughly 50% chance
+int rand_sign() {
+  return (float) rand() / ((float) INT32_MAX / 2.0f) <= 0.5 ? -1 : 1;
+}
+
+// Returns -1/0/1 depending on the x being neg., zero or pos.
+int sign(const int x) {
+  if (x == 0) { return 0; }
+  return x > 0 ? 1 : -1;
 }
