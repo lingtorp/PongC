@@ -1,11 +1,15 @@
 #include <ncurses.h>
+#include <netinet/in.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
+#include <sys/socket.h>
 #include <sys/time.h>
 #include <time.h>
+#include <unistd.h>
 
 // The number of milliseconds between ticks to the ball and opponent.
-#define TICK_DELAY 50
+#define TICK_DELAY 40
 
 typedef struct {
   int score;
@@ -23,10 +27,18 @@ typedef struct {
   bool collided;
 } pong_ball;
 
+typedef struct {
+  int padding;
+} config;
+
 // Gameplay handling
 void tick_ball(pong_ball *ball, pong_win *opp, pong_win *player);
 void tick_opponent(pong_win *opponent, const pong_ball *ball);
 void reset_ball(pong_ball *ball);
+
+// User inteface
+void draw_score(const uint32_t x, const uint32_t y, const uint8_t score);
+void display_start_menu(config *cfg);
 
 // Window handling
 WINDOW *create_newwin(int height, int width, int starty, int startx);
@@ -49,8 +61,8 @@ int main() {
   int width = 2;                      // Box width
   int lstarty = (LINES - height) / 2; // Midheight of the window, start for pads
   int rstarty = lstarty;
-  int rstartx = COLS - width;
-  int lstartx = 0;
+  int lstartx = 2;
+  int rstartx = COLS - width - lstartx;
 
   // Init the opponent
   pong_win opponent;
@@ -90,20 +102,13 @@ int main() {
   struct timeval now;
   gettimeofday(&start, NULL);
 
-  /* Main loop */
-  unsigned int diff;
-  int ch;
+  config cfg;
+  display_start_menu(&cfg);
+
+  // Main loop
+  int ch = 0;
   bool done = false;
   while (!done) {
-    // Check time
-    gettimeofday(&now, NULL); // Deprecated in POSIX (?)
-    diff = ((now.tv_sec * 1000) + (now.tv_usec / 1000)) -
-           ((start.tv_sec * 1000) + (start.tv_usec / 1000));
-    if (diff >= TICK_DELAY) {
-      tick_ball(&ball, &opponent, &player);
-      tick_opponent(&opponent, &ball);
-      start = now;
-    }
 
     // Process player input
     ch = getch();
@@ -135,12 +140,23 @@ int main() {
     mvprintw(0, 0, "EXIT: q \nRESET: r\nMOVEMENT: UP: k, DOWN: j");
 
     // Redraw scores
-    attron(A_BOLD); // The terminals best highlightning mode
-    mvprintw(5, COLS / 3, "%i \n", player.score); // 1/3 of the width
-    mvprintw(5, COLS - COLS / 3, "%i", opponent.score);
+    draw_score(5, COLS / 3, player.score);
+    draw_score(5, COLS - COLS / 3, opponent.score);
 
     // Redraw the tennis line
     mvvline(0, COLS / 2, '|', LINES);
+
+    // Check time
+    gettimeofday(&now, NULL); // Deprecated in POSIX (?)
+    unsigned int diff = ((now.tv_sec * 1000) + (now.tv_usec / 1000)) -
+                        ((start.tv_sec * 1000) + (start.tv_usec / 1000));
+
+    // Draw ball
+    if (diff >= TICK_DELAY) {
+      tick_ball(&ball, &opponent, &player);
+      tick_opponent(&opponent, &ball);
+      start = now;
+    }
 
     standend(); // Reset all attributes
   }
@@ -184,9 +200,16 @@ void tick_ball(pong_ball *ball, pong_win *opp, pong_win *player) {
 
   // Add random velocity when collided with players
   if (ball->collided) {
-    ball->dyx += sign(ball->dyx) * rand() % 2;
+    ball->dyx += sign(ball->dyx) * rand() % 3;
     ball->dyy += sign(ball->dyy) * rand() % 2;
     ball->collided = false;
+
+    // Redraw both players
+    destroy_win(player->win);
+    player->win = create_newwin(player->height, player->width, player->posY,
+                                player->posX);
+    destroy_win(opp->win);
+    opp->win = create_newwin(opp->height, opp->width, opp->posY, opp->posX);
   }
 
   // Update ball position by destroying and recreating the window
@@ -214,7 +237,8 @@ void reset_ball(pong_ball *ball) {
 }
 
 // Allocs a new window and sets a box around it plus displays it
-WINDOW *create_newwin(const int height, const int width, const int starty, const int startx) {
+WINDOW *create_newwin(const int height, const int width, const int starty,
+                      const int startx) {
   WINDOW *local_win;
 
   local_win = newwin(height, width, starty, startx);
@@ -239,11 +263,102 @@ void destroy_win(WINDOW *local_win) {
 
 // Return -1/1 with a roughly 50% chance
 int rand_sign() {
-  return (float) rand() / ((float) INT32_MAX / 2.0f) <= 0.5 ? -1 : 1;
+  return (float)rand() / ((float)INT32_MAX / 2.0f) <= 0.5 ? -1 : 1;
 }
 
 // Returns -1/0/1 depending on the x being neg., zero or pos.
 int sign(const int x) {
-  if (x == 0) { return 0; }
+  if (x == 0) {
+    return 0;
+  }
   return x > 0 ? 1 : -1;
+}
+
+void draw_score(const uint32_t y, const uint32_t x, const uint8_t score) {
+  // TODO: Larger numbers as the original
+  attron(A_BOLD);
+  mvprintw(y, x, "%i", score);
+}
+
+#define SERVER_PORT 8080
+void server() {
+  // Init TCP socket
+  int server_socket_fd = socket(AF_INET, SOCK_STREAM, 0);
+  if (server_socket_fd == 0) {
+    fprintf(stderr, "Failed to create server socket");
+    exit(-1);
+  }
+
+  struct sockaddr_in addr;
+  addr.sin_family = AF_UNSPEC; // IPv4, IPv6, w/e
+  addr.sin_port = htons(SERVER_PORT);
+  addr.sin_addr.s_addr = htonl(INADDR_ANY);
+
+  if (bind(server_socket_fd, (struct sockaddr *)&addr, sizeof(addr)) != 0) {
+    fprintf(stderr, "Failed to bind socket");
+    exit(-1);
+  }
+
+  const uint32_t BACKLOG = 3;
+  if (listen(server_socket_fd, BACKLOG) != 0) {
+    fprintf(stderr, "Failed to listen");
+  }
+
+  bool done = false;
+  while (!done) {
+    struct sockaddr_storage client_socket;
+    uint32_t addr_size = sizeof(struct sockaddr_storage);
+    int client_socket_fd = accept(server_socket_fd, (struct sockaddr *)&client_socket, &addr_size);
+    if (client_socket_fd < 0) {
+      fprintf(stderr, "Failed to accept");
+    } else {
+      // Send msg to client that connected
+      const char* msg = "PongC server response";
+      const int lng = sizeof(msg);
+      const int bytes_sent = send(client_socket_fd, msg, lng, 0);
+      if (bytes_sent < lng) {
+        fprintf(stderr, "Did not successfully send full msg");
+      }
+      close(client_socket_fd);
+    }
+  }
+}
+
+void client() {
+  int socket_fd = socket(AF_INET, SOCK_STREAM, 0);
+  if (socket_fd == -1) {
+    fprintf(stderr, "Failed to create client socket");
+  }
+
+  struct sockaddr_in server;
+  // TODO: Broadcast later on, hardcode IP for now?
+}
+
+void display_start_menu(config *cfg) {
+  // TODO: Choose AI or multiplayer over network or local
+  if (cfg) {
+    move(0, 0);
+  }
+
+  mvprintw(0, 0, "START MENU");
+
+  bool done = false;
+  while (!done) {
+
+    // Process player input
+    const char ch = getch();
+    switch (ch) {
+    case 's':
+      mvprintw(0, 0, "Starting server on: ");
+      server();
+      break;
+    case 'c':
+      mvprintw(0, 0, "Starting client on: ");
+      client();
+      break;
+    case 'q':
+      done = true;
+      break;
+    }
+  }
 }

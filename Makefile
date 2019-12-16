@@ -1,2 +1,2 @@
 default:
-	gcc -W -Wall -Werror -Wextra main.c -lncurses -o pong
+	gcc -W -g -Wall -Werror -Wextra main.c -lncurses -o pong
